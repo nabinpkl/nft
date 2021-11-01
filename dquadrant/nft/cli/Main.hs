@@ -100,6 +100,7 @@ import qualified Cardano.Ledger.Alonzo.TxBody as LedgerBody
 
 import Error
 import TxUtils
+import Nft
 
 
 unHex ::  ToText a => a -> Maybe  ByteString
@@ -165,6 +166,9 @@ main = do
           writePlutusScript 42 scriptname (marketScriptPlutus defaultMarket) (marketScriptBS defaultMarket)
           putStrLn $ "Script Written to : " ++ scriptname
           putStrLn $ "Market  :: " ++ ( show $ marketAddress defaultMarket )
+        "compile-nft-script" -> do
+          writePlutusScript 42 "nft.plutus" nftMintingScript mintingNFTScriptShortBs
+        
         "balance" -> runBalanceCommand  conn (map toText $ tail args)
         "connect" -> runConnectionTest conn
         "keygen"  -> runGenerateKey
@@ -199,7 +203,7 @@ runMintNft conn [nameStr] = do
             values = map utxosValue utxos
             totalInputValue = sumValue values
 
-        scriptPath <- getWorkPath ["policy.script"]
+        scriptPath <- getWorkPath ["nft.plutus"]
         scriptWitness <- createScriptWitness' AlonzoEra scriptPath
 
 
@@ -283,8 +287,11 @@ runMintNft conn [nameStr] = do
 createScriptWitness'
   :: CardanoEra era
   -> FilePath
-  -> IO (ScriptWitness witctx era)
+  -> IO (ScriptWitness WitCtxMint era)
 createScriptWitness' era scriptPath = do
+  --TODO
+  let requiredMemory = 700000000
+      requiredSteps  = 700000000
 
   eitherPolicyFile <- try readScriptFromFile
   case eitherPolicyFile of
@@ -292,14 +299,14 @@ createScriptWitness' era scriptPath = do
     Right scriptAnyLang -> do
       ScriptInEra langInEra script'   <- validateScriptSupportedInEra' era scriptAnyLang
       case script' of
-        SimpleScript version sscript ->
-          return $ SimpleScriptWitness
+        PlutusScript version sscript ->
+          return $ PlutusScriptWitness
                     langInEra version sscript
+                    NoScriptDatumForMint
+                    (ScriptDataNumber 1)
+                    (ExecutionUnits requiredSteps requiredMemory)
 
-        -- If the supplied cli flags were for a simple script (i.e. the user did
-        -- not supply the datum, redeemer or ex units), but the script file turns
-        -- out to be a valid plutus script, then we must fail.
-        PlutusScript{} -> throw $ SomeError  "Error this is a plutus script not simple script."
+        SimpleScript{} -> throw $ SomeError  "Error this is a plutus script not simple script."
 
   where
     readScriptFromFile = do
