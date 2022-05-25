@@ -1,1 +1,1 @@
-Redirect [dquadrant/nft](./dquadrant/nft/README.md)
+Simple stable coin project based on cardano and age usd protocol.
